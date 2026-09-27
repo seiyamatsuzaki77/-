@@ -9,6 +9,7 @@
  *   4. 9/23〜10/31 の放送枠を、シート6 にあった番組・スクール・メモを引き継いで流し込む
  *
  * 使い方: スプレッドシートの「拡張機能 > Apps Script」に貼り付けて setupPlanningSheet を実行。
+ *         12月末までの撮影スケジュールを ④台本進行管理 に入れるときは addShootingSchedule を実行。
  * 再実行しても元データのバックアップは上書きされない（放送枠は初期値で入れ直される）。
  */
 
@@ -82,10 +83,10 @@ const ROWS = [
   ['2026/10/23', 'NoBorder X File', 'AI＋', '未定', '企画待ち', '', ''],
   ['2026/10/24', 'NoBorder', 'RVA', '未定', '企画待ち', '', ''],
   ['2026/10/25', 'LASTCALL', "HERO'ZZ", '未定', '企画待ち', '', ''],
-  ['2026/10/27', '令和の龍', 'RVA', '未定', '企画待ち', '', ''],
+  ['2026/10/27', '令和の龍', 'RVA', '新素材', '企画待ち', '2026/10/14', '10/14収録で差し込み撮影（③収録スケジュール）'],
   ['2026/10/28', 'REAL VALUE', 'RVA', '未定', '企画待ち', '', ''],
   ['2026/10/29', 'HOSTCALL', "HERO'ZZ", '未定', '企画待ち', '', ''],
-  ['2026/10/30', 'NoBorder X File', 'AI＋', '未定', '企画待ち', '', ''],
+  ['2026/10/30', 'NoBorder X File', 'AI＋', '新素材', '企画待ち', '2026/10/17', '10/17収録で差し込み撮影（③収録スケジュール）。撮影するスクールは要決定'],
   ['2026/10/31', 'NoBorder', 'AI＋', '未定', '企画待ち', '', ''],
 ];
 
@@ -204,6 +205,69 @@ function setupPlanningSheet() {
   sh.setRowHeight(3, 48);
   sh.setFrozenRows(3);
   sh.setFrozenColumns(4);
+
+  SpreadsheetApp.flush();
+}
+
+// ③放送カレンダー【収録スケジュール】のうち、10/14以降・12月末までの収録日
+// [番組, スクール, 撮影/収録日, メモ]
+// 初回放送目安 = 収録日+10日（編集期間）以降で最初の同番組の放送枠
+// ・LASTCALL/HOSTCALL は 9/24・9/25 と同じく1回の収録で CREATOR'ZZ と HERO'ZZ の2本を撮る
+// ・NoBorder / NoBorder X File は AI＋ と RVA を交互に入れているため、スクールは空欄（要決定）
+const SHOOTS = [
+  ['令和の龍', 'RVA', '2026/10/14', '初回放送目安 10/27(火)'],
+  ['NoBorder X File', '', '2026/10/17', '初回放送目安 10/30(金)／スクール要決定（AI＋ or RVA）'],
+  ['LASTCALL', "CREATOR'ZZ", '2026/10/22', '初回放送目安 11/1(日)'],
+  ['LASTCALL', "HERO'ZZ", '2026/10/22', '初回放送目安 11/1(日)'],
+  ['HOSTCALL', "CREATOR'ZZ", '2026/10/23', '初回放送目安 11/5(木)'],
+  ['HOSTCALL', "HERO'ZZ", '2026/10/23', '初回放送目安 11/5(木)'],
+  ['NoBorder', '', '2026/10/24', '初回放送目安 11/7(土)／スクール要決定（AI＋ or RVA）'],
+  ['REAL VALUE', 'RVA', '2026/10/25', '初回放送目安 11/4(水)'],
+  ['令和の龍', 'RVA', '2026/11/11', '初回放送目安 11/24(火)'],
+  ['NoBorder X File', '', '2026/11/21', '初回放送目安 12/4(金)／スクール要決定（AI＋ or RVA）'],
+  ['REAL VALUE', 'RVA', '2026/11/22', '初回放送目安 12/2(水)'],
+  ['NoBorder', '', '2026/11/28', '初回放送目安 12/12(土)／スクール要決定（AI＋ or RVA）'],
+  ['REAL VALUE', 'RVA', '2026/12/06', '初回放送目安 12/16(水)／12/6〜10は連日収録：差し込み撮影する日を決めて不要な行は削除'],
+  ['REAL FOOD', 'RVA', '2026/12/06', '定期放送枠なし：使う枠を要決定'],
+  ['REAL VALUE', 'RVA', '2026/12/07', '初回放送目安 12/23(水)／12/6〜10連日収録'],
+  ['REAL VALUE', 'RVA', '2026/12/08', '初回放送目安 12/23(水)／12/6〜10連日収録'],
+  ['REAL VALUE', 'RVA', '2026/12/09', '初回放送目安 12/23(水)／12/6〜10連日収録'],
+  ['REAL VALUE', 'RVA', '2026/12/10', '初回放送目安 12/23(水)／12/6〜10連日収録'],
+  ['令和の龍', 'RVA', '2026/12/16', '初回放送目安 12/29(火)'],
+  ['NoBorder', '', '2026/12/19', '初回放送目安 1/2(土)／スクール要決定（AI＋ or RVA）'],
+];
+
+function addShootingSchedule() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sh = ss.getSheetByName(SCRIPT_SHEET);
+  if (!sh) throw new Error(`「${SCRIPT_SHEET}」が見つかりません`);
+  const tz = ss.getSpreadsheetTimeZone();
+  const fmt = v => (v instanceof Date ? Utilities.formatDate(v, tz, 'yyyy/MM/dd') : String(v));
+
+  // 既存行（番組・スクール・撮影日が同じもの）は追加しない
+  const data = sh.getRange(4, 1, LAST_ROW - 3, 3).getValues();
+  const existing = new Set(data.filter(r => r[0] !== '').map(r => `${r[0]}|${r[1]}|${fmt(r[2])}`));
+  let lastFilled = 3;
+  data.forEach((r, i) => { if (r[0] !== '') lastFilled = i + 4; });
+
+  const add = SHOOTS.filter(r => !existing.has(`${r[0]}|${r[1]}|${r[2]}`));
+  if (add.length === 0) return;
+  const start = lastFilled + 1;
+  const n = add.length;
+
+  // I〜Q列は ④ の ARRAYFORMULA が撮影日から自動で埋める
+  sh.getRange(start, 1, n, 5).setValues(add.map(r => [r[0], r[1], r[2], '公式撮影', '一次提出待ち']));
+  sh.getRange(start, 3, n, 1).setNumberFormat('yyyy-mm-dd');
+  sh.getRange(start, 21, n, 1).setValues(add.map(r => [r[3]]));
+  sh.getRange(start, 18, n, 3).insertCheckboxes();
+
+  // ④ の入力規則は40行目前後までしか付いていないので、追加行にも同じプルダウンを付ける
+  const list = (values) => SpreadsheetApp.newDataValidation().requireValueInList(values, true).setAllowInvalid(true).build();
+  sh.getRange(start, 1, n, 1).setDataValidation(list(PROGRAMS));
+  sh.getRange(start, 2, n, 1).setDataValidation(list(SCHOOLS));
+  sh.getRange(start, 4, n, 1).setDataValidation(list(['公式撮影', '非公式撮影']));
+  sh.getRange(start, 5, n, 1).setDataValidation(list(['一次提出待ち', '二次提出待ち', '三次提出待ち', '小澤さん承認済', '撮影済']));
+  sh.getRange(start, 8, n, 1).setDataValidation(list(OWNERS));
 
   SpreadsheetApp.flush();
 }
