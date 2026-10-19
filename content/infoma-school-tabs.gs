@@ -26,8 +26,9 @@ const SCHOOLS = [
 ];
 
 const LIST_ROW = 9;     // 素材一覧の1行目
-const LIST_ROWS = 50;   // 素材一覧の最大行数（1スクール50素材まで）
-const HIST_ROWS = 500;  // 使用履歴の最大行数
+const LIST_ROWS = 30;   // 素材一覧の最大行数（1スクール30素材まで）
+const HIST_ROWS = 500;  // 使用履歴の最大行数（数式の範囲）
+const HIST_FRAME_ROWS = 100; // 使用履歴で罫線を引く行数
 
 const COLOR_HEADER = '#1f3a5f';
 const COLOR_UNUSED = '#fde7e7';
@@ -108,7 +109,7 @@ function buildTab_(ss, school) {
 
   // ---- 素材一覧（A:D は⑥から取得、E:H は行ごとの数式）----
   sh.getRange(LIST_ROW, 1).setFormula(
-    '=IFERROR(FILTER(' + M + '$B$4:$E,' + M + '$A$4:$A,' + K + ',' + M + '$B$4:$B,"<>"),"")');
+    '=IFERROR(FILTER(' + M + '$B$4:$E,' + M + '$A$4:$A=' + K + ',' + M + '$B$4:$B<>""),"")');
 
   const rows = [];
   for (let i = 0; i < LIST_ROWS; i++) {
@@ -133,6 +134,12 @@ function buildTab_(ss, school) {
     '=IFERROR(SORT(FILTER({' + E + '$A$3:$A,' + E + '$C$3:$C,' + E + '$D$3:$D,' + E + '$F$3:$F,' + E + '$E$3:$E},' +
     E + '$B$3:$B=' + K + ',' + E + '$F$3:$F<>""),1,FALSE),"")');
   sh.getRange(LIST_ROW, 11, HIST_ROWS, 1).setNumberFormat('yyyy/mm/dd').setHorizontalAlignment('left');
+
+  // ---- 罫線（入力・表示する範囲を区切る）----
+  const BORDER = '#b7c0cc';
+  [sh.getRange(8, 1, LIST_ROWS + 1, 8), sh.getRange(8, 11, HIST_FRAME_ROWS + 1, 5)].forEach(function (r) {
+    r.setBorder(true, true, true, true, true, true, BORDER, SpreadsheetApp.BorderStyle.SOLID);
+  });
 
   // ---- 条件付き書式 ----
   const listRange = sh.getRange(LIST_ROW, 1, LIST_ROWS, 8);
