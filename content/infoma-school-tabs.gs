@@ -48,7 +48,7 @@ function buildSchoolTabs() {
     if (!ss.getSheetByName(n)) throw new Error('シートが見つかりません: ' + n);
   });
   SCHOOLS.forEach(function (s) { buildTab_(ss, s); });
-  SpreadsheetApp.getUi().alert('スクール別タブを作成・更新しました: ' + SCHOOLS.map(function (s) { return s.tab; }).join(' / '));
+  notify_('スクール別タブを作成・更新しました: ' + SCHOOLS.map(function (s) { return s.tab; }).join(' / '));
 }
 
 function buildTab_(ss, school) {
@@ -162,6 +162,15 @@ function buildTab_(ss, school) {
   sh.getRange(8, 1, 1, 8).setWrap(true);
 }
 
+/** 完了メッセージ。エディタ実行など alert が使えない場面ではシート右下のトーストで出す。 */
+function notify_(msg) {
+  try {
+    SpreadsheetApp.getUi().alert(msg);
+  } catch (e) {
+    SpreadsheetApp.getActiveSpreadsheet().toast(msg, 'インフォマ', 8);
+  }
+}
+
 function styleHeader_(range) {
   range.setBackground(COLOR_HEADER).setFontColor('#ffffff').setFontWeight('bold')
     .setHorizontalAlignment('center').setVerticalAlignment('middle');
@@ -177,7 +186,7 @@ function setupMaterialDropdown() {
     .setAllowInvalid(true) // 入力は止めず、警告表示のみ
     .build();
   effect.getRange('F3:F' + effect.getMaxRows()).setDataValidation(rule);
-  SpreadsheetApp.getUi().alert('⑤の「使用素材」列にドロップダウンを設定しました。');
+  notify_('⑤の「使用素材」列にドロップダウンを設定しました。');
 }
 
 /** ⑥の 使用回数(I)・最終使用日(J)・累計LINE登録数(K) を数式で埋める。 */
@@ -204,5 +213,5 @@ function fillMasterUsage() {
   }
   master.getRange(first, 9, rows.length, 3).setFormulas(rows);
   master.getRange(first, 10, rows.length, 1).setNumberFormat('yyyy/mm/dd');
-  SpreadsheetApp.getUi().alert('⑥の使用回数・最終使用日・累計LINE登録数を数式化しました。');
+  notify_('⑥の使用回数・最終使用日・累計LINE登録数を数式化しました。');
 }
