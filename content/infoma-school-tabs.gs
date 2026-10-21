@@ -9,7 +9,8 @@
  * 前提（ここを崩すと集計がずれる）:
  *   - ⑥素材マスタ : 4行目から1素材＝1行。A=スクール, B=素材タイトル, C=種類, D=尺, E=ステータス
  *   - ⑤インフォマ効果分析 : 3行目から1配信＝1行。A=配信日, B=スクール, C=番組, D=動画タイトル,
- *                           E=動画URL, F=使用素材(⑥の素材タイトル), K=LINE登録数
+ *                           E=動画URL, F=使用素材(⑥の素材タイトル), I=総再生数, J〜O=LINE/予約/成約の目標と実績,
+ *                           P〜R=各率, S=計測日, T=学び・メモ
  *   - 1配信につき使う素材は1つ（使用回数＝⑤でその素材が入っている行数）
  */
 
@@ -27,12 +28,15 @@ const SCHOOLS = [
 
 const LIST_ROW = 9;     // 素材一覧の1行目
 const LIST_ROWS = 30;   // 素材一覧の最大行数（1スクール30素材まで）
-const HIST_ROWS = 500;  // 使用履歴の最大行数（数式の範囲）
-const HIST_FRAME_ROWS = 100; // 使用履歴で罫線を引く行数
+const HIST_ROWS = 500;  // 配信別効果の最大行数（数式の範囲）
+const HIST_FRAME_ROWS = 100; // 配信別効果で罫線を引く行数
+const HIST_COLS = 17;   // 配信別効果の列数（K〜AA）
 
 const COLOR_HEADER = '#1f3a5f';
 const COLOR_UNUSED = '#fde7e7';
 const COLOR_STALE = '#fff0d6';
+const COLOR_GOOD = '#1a7f37';
+const COLOR_BAD = '#c62828';
 
 function onOpen() {
   SpreadsheetApp.getUi()
@@ -60,6 +64,10 @@ function buildTab_(ss, school) {
     sh.getRange(1, 1, sh.getMaxRows(), sh.getMaxColumns()).breakApart();
     sh.clear();
     sh.clearConditionalFormatRules();
+  }
+
+  if (sh.getMaxColumns() < 11 + HIST_COLS - 1) {
+    sh.insertColumnsAfter(sh.getMaxColumns(), 11 + HIST_COLS - 1 - sh.getMaxColumns());
   }
 
   const K = JSON.stringify(school.key);          // 数式に埋め込むスクール名
@@ -100,12 +108,12 @@ function buildTab_(ss, school) {
 
   // ---- 見出し ----
   sh.getRange('A7').setValue('■ 素材別の使用状況').setFontWeight('bold');
-  sh.getRange('K7').setValue('■ 使用履歴（新しい順）').setFontWeight('bold');
+  sh.getRange('K7').setValue('■ 配信別の効果（新しい順・⑤から自動表示）').setFontWeight('bold');
 
   const listHeaders = ['素材タイトル', '種類', '尺(秒)', 'ステータス', '使用回数', '最終使用日', '最終使用からの日数', '累計LINE登録数'];
-  const histHeaders = ['配信日', '番組', '動画タイトル', '使用素材', '動画URL'];
+  const histHeaders = ['配信日', '番組', '動画タイトル', '使用素材', '総再生数', 'LINE登録目標', 'LINE登録数', '予約目標', '予約数', '成約目標', '成約数', 'LINE登録率', '予約率', '成約率', '計測日', '学び・メモ', '動画URL'];
   styleHeader_(sh.getRange(8, 1, 1, listHeaders.length).setValues([listHeaders]));
-  styleHeader_(sh.getRange(8, 11, 1, histHeaders.length).setValues([histHeaders]));
+  styleHeader_(sh.getRange(8, 11, 1, histHeaders.length).setValues([histHeaders]).setWrap(true));
 
   // ---- 素材一覧（A:D は⑥から取得、E:H は行ごとの数式）----
   sh.getRange(LIST_ROW, 1).setFormula(
@@ -129,15 +137,22 @@ function buildTab_(ss, school) {
   sh.getRange(LIST_ROW, 7, LIST_ROWS, 1).setNumberFormat('0"日"').setHorizontalAlignment('right');
   sh.getRange(LIST_ROW, 8, LIST_ROWS, 1).setNumberFormat('#,##0').setHorizontalAlignment('right');
 
-  // ---- 使用履歴（⑤から、使用素材が入っている行だけ、新しい順）----
+  // ---- 配信別の効果（⑤から、このスクールの全配信、新しい順）----
   sh.getRange(LIST_ROW, 11).setFormula(
-    '=IFERROR(SORT(FILTER({' + E + '$A$3:$A,' + E + '$C$3:$C,' + E + '$D$3:$D,' + E + '$F$3:$F,' + E + '$E$3:$E},' +
-    E + '$B$3:$B=' + K + ',' + E + '$F$3:$F<>""),1,FALSE),"")');
-  sh.getRange(LIST_ROW, 11, HIST_ROWS, 1).setNumberFormat('yyyy/mm/dd').setHorizontalAlignment('left');
+    '=IFERROR(SORT(FILTER({' +
+    E + '$A$3:$A,' + E + '$C$3:$C,' + E + '$D$3:$D,' + E + '$F$3:$F,' + E + '$I$3:$I,' +
+    E + '$J$3:$J,' + E + '$K$3:$K,' + E + '$L$3:$L,' + E + '$M$3:$M,' + E + '$N$3:$N,' + E + '$O$3:$O,' +
+    E + '$P$3:$P,' + E + '$Q$3:$Q,' + E + '$R$3:$R,' + E + '$S$3:$S,' + E + '$T$3:$T,' + E + '$E$3:$E},' +
+    E + '$B$3:$B=' + K + '),1,FALSE),"")');
+  sh.getRange(LIST_ROW, 11, HIST_ROWS, 1).setNumberFormat('yyyy/mm/dd').setHorizontalAlignment('left');   // 配信日
+  sh.getRange(LIST_ROW, 15, HIST_ROWS, 1).setHorizontalAlignment('right');                                  // 総再生数
+  sh.getRange(LIST_ROW, 16, HIST_ROWS, 6).setNumberFormat('0.0##').setHorizontalAlignment('right');         // 目標・実績
+  sh.getRange(LIST_ROW, 22, HIST_ROWS, 3).setNumberFormat('0.000%').setHorizontalAlignment('right');        // 各率
+  sh.getRange(LIST_ROW, 25, HIST_ROWS, 1).setNumberFormat('yyyy/mm/dd').setHorizontalAlignment('left');     // 計測日
 
   // ---- 罫線（入力・表示する範囲を区切る）----
   const BORDER = '#b7c0cc';
-  [sh.getRange(8, 1, LIST_ROWS + 1, 8), sh.getRange(8, 11, HIST_FRAME_ROWS + 1, 5)].forEach(function (r) {
+  [sh.getRange(8, 1, LIST_ROWS + 1, 8), sh.getRange(8, 11, HIST_FRAME_ROWS + 1, HIST_COLS)].forEach(function (r) {
     r.setBorder(true, true, true, true, true, true, BORDER, SpreadsheetApp.BorderStyle.SOLID);
   });
 
@@ -159,10 +174,23 @@ function buildTab_(ss, school) {
     SpreadsheetApp.newConditionalFormatRule()
       .whenTextEqualTo('未着手').setBackground('#e6e6e6').setRanges([statusRange]).build(),
   ];
+  // 目標との比較（実績が目標以上＝緑、未満＝赤）: LINE(P→Q) / 予約(R→S) / 成約(T→U)
+  [['P', 'Q'], ['R', 'S'], ['T', 'U']].forEach(function (pair) {
+    const target = pair[0], actual = pair[1];
+    const range = sh.getRange(LIST_ROW, actual === 'Q' ? 17 : actual === 'S' ? 19 : 21, HIST_FRAME_ROWS, 1);
+    rules.push(
+      SpreadsheetApp.newConditionalFormatRule()
+        .whenFormulaSatisfied('=AND(ISNUMBER($' + actual + LIST_ROW + '),ISNUMBER($' + target + LIST_ROW + '),$' + actual + LIST_ROW + '>=$' + target + LIST_ROW + ')')
+        .setFontColor(COLOR_GOOD).setBold(true).setRanges([range]).build(),
+      SpreadsheetApp.newConditionalFormatRule()
+        .whenFormulaSatisfied('=AND(ISNUMBER($' + actual + LIST_ROW + '),ISNUMBER($' + target + LIST_ROW + '),$' + actual + LIST_ROW + '<$' + target + LIST_ROW + ')')
+        .setFontColor(COLOR_BAD).setBold(true).setRanges([range]).build()
+    );
+  });
   sh.setConditionalFormatRules(rules);
 
   // ---- 体裁 ----
-  const widths = { 1: 240, 2: 70, 3: 60, 4: 90, 5: 80, 6: 100, 7: 120, 8: 120, 9: 20, 10: 20, 11: 100, 12: 120, 13: 320, 14: 200, 15: 260 };
+  const widths = { 1: 240, 2: 70, 3: 60, 4: 90, 5: 80, 6: 100, 7: 120, 8: 120, 9: 20, 10: 20, 11: 100, 12: 120, 13: 320, 14: 200, 15: 90, 16: 90, 17: 90, 18: 80, 19: 80, 20: 80, 21: 80, 22: 90, 23: 80, 24: 80, 25: 100, 26: 240, 27: 260 };
   Object.keys(widths).forEach(function (c) { sh.setColumnWidth(Number(c), widths[c]); });
   sh.setFrozenRows(8);
   sh.setHiddenGridlines(true);
